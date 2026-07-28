@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useTracking } from "../hooks/useTracking";
 import { startTrip, endTrip, pinStop } from "../apis/trip.api";
 import { DEMO_ROUTE, USE_DEMO } from "../constants/demoRoute";
-import { BusIcon, LocationPin, ArrowRight } from "../icons/svg";
+import { BusIcon, LocationPin, ArrowRight } from "../icons/driverIcons";
 
 
 export default function Driver() {
@@ -28,14 +28,6 @@ export default function Driver() {
   const { isTracking, busStatus, startTracking, stopTracking, resetTrip, lastSent, error, lastLocation } = useTracking(tripId);
 
 
-  // Get the lat/lng used to seed the source/destination stops.
-  // In demo mode we deliberately DON'T use the device's real GPS — the
-  // seeded terminal stops must line up with the simulated DEMO_ROUTE's own
-  // start/end points, otherwise they anchor the route to wherever this
-  // browser physically is (unrelated to the simulated path), and every
-  // mid-trip pin ends up being inserted relative to the wrong reference
-  // point — which is exactly what causes stops to come out in the wrong
-  // sequence.
   const getSeedCoords = async (which: "source" | "destination"): Promise<{ lat: number; lng: number }> => {
     if (USE_DEMO) {
       const [lat, lng] = which === "source" ? DEMO_ROUTE[0] : DEMO_ROUTE[DEMO_ROUTE.length - 1];

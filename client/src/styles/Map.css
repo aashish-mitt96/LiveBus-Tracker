@@ -1,11 +1,12 @@
 @import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Google+Sans:wght@400;500;700&family=Roboto:wght@400;500;700&display=swap");
 
-html, body, #root {
+html,
+body,
+#root {
   height: 100%;
   margin: 0;
 }
 
-/* ── theme tokens ────────────────────────────────────────────────────────── */
 .smt-root {
   --smt-bg: #f8f9fa;
   --smt-text-primary: #202124;
@@ -14,8 +15,8 @@ html, body, #root {
   --smt-surface: #ffffff;
   --smt-border: #dadce0;
   --smt-border-soft: #e8eaed;
-  --smt-shadow: rgba(60,64,67,0.15);
-  --smt-shadow-strong: rgba(60,64,67,0.3);
+  --smt-shadow: rgba(60, 64, 67, 0.15);
+  --smt-shadow-strong: rgba(60, 64, 67, 0.3);
   --smt-tile-filter: none;
   --smt-map-bg: #e8eaed;
 
@@ -36,9 +37,10 @@ html, body, #root {
   --smt-surface: #0f1218;
   --smt-border: #1e2530;
   --smt-border-soft: #1e2530;
-  --smt-shadow: rgba(0,0,0,0.35);
-  --smt-shadow-strong: rgba(0,0,0,0.5);
-  --smt-tile-filter: invert(0.92) hue-rotate(180deg) brightness(0.85) saturate(0.8);
+  --smt-shadow: rgba(0, 0, 0, 0.35);
+  --smt-shadow-strong: rgba(0, 0, 0, 0.5);
+  --smt-tile-filter: invert(0.92) hue-rotate(180deg) brightness(0.85)
+    saturate(0.8);
   --smt-map-bg: #1a1d24;
 
   --smt-blue-bg: #17263f;
@@ -57,7 +59,9 @@ html, body, #root {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  transition: background 0.2s ease, color 0.2s ease;
+  transition:
+    background 0.2s ease,
+    color 0.2s ease;
 }
 
 .smt-header {
@@ -70,7 +74,6 @@ html, body, #root {
   flex-shrink: 0;
 }
 
-/* ── personal ETA banner (boarding / alighting stop summary) ─────────────── */
 .smt-eta-banner {
   display: flex;
   flex-wrap: wrap;
@@ -126,7 +129,10 @@ html, body, #root {
   background: var(--smt-surface);
   color: var(--smt-text-secondary);
   cursor: pointer;
-  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
 }
 .smt-theme-toggle:hover {
   background: var(--smt-blue-bg);
@@ -166,7 +172,6 @@ html, body, #root {
   animation: pulse 1.5s infinite;
 }
 
-/* ── body layout: map 75% + sidebar 25% ─────────────────────────────────── */
 .smt-body {
   flex: 1;
   min-height: 0;
@@ -332,7 +337,6 @@ html, body, #root {
   font-weight: 500;
 }
 
-/* ── leaflet: light OSM tiles by default, inverted to dark on toggle ────── */
 .smt-map-wrap .leaflet-container {
   background: var(--smt-map-bg);
   font-family: "Roboto", sans-serif;
@@ -373,12 +377,17 @@ html, body, #root {
   justify-content: center;
 }
 @keyframes pulse {
-  0% { box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.5); }
-  70% { box-shadow: 0 0 0 8px rgba(26, 115, 232, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(26, 115, 232, 0); }
+  0% {
+    box-shadow: 0 0 0 0 rgba(26, 115, 232, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 8px rgba(26, 115, 232, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(26, 115, 232, 0);
+  }
 }
 
-/* ── responsive: stack on small screens, allow scroll ───────────────────── */
 @media (max-width: 900px) {
   .smt-root {
     height: auto;

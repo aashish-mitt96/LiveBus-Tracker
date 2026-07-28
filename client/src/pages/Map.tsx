@@ -1,245 +1,79 @@
-import { useEffect, useRef, useState, useCallback } from "react";
-import { useParams } from "react-router-dom";
 import L from "leaflet";
-import type { Map, Marker, Polyline } from "leaflet";
+import '../styles/Map.css';
 import "leaflet/dist/leaflet.css";
+import { useParams } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
 import { getStops, getEta } from "../apis/trip.api";
-import '../styles/Map.css';
+import type { Map, Marker, Polyline } from "leaflet";
+import { useEffect, useRef, useState, useCallback } from "react";
+import { makeBusIcon, makeStopIcon, makeStopPopupHtml } from "../icons/mapIcons";
+import type { LatLng, Stop, StopEta, BoardAlight, Status, LocationUpdate } from "../types/map.types";
+import { buildCumulativeDist, getPositionAt, easeInOut, bearing, sortBySeq } from "../utils/mapGeometry";
 
-// ── types ─────────────────────────────────────────────────────────────────────
-
-type LatLng = [number, number];
-type Stop = { lat: number; lng: number; stop_name: string; seq: number };
-
-type StopEta = {
-  seq:                number;
-  stopName:           string;
-  distanceRemainingM: number | null;
-  etaSeconds:         number | null;
-  etaMinutes:         number | null;
-  etaTimestamp:       number | null;
-  passed:             boolean;
-};
-
-type BoardAlight = { board?: string; alight?: string };
-
-type Status = "idle" | "connecting" | "riding" | "waiting" | "stopped" | "last_known";
-
-interface LocationUpdate {
-  tripId: string;
-  lat: number;
-  lon: number;
-  vel?: number | null;
-  acc?: number | null;
-  timestamp: number;
-}
-
-// ── constants ─────────────────────────────────────────────────────────────────
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL;
 
-// How long each queued segment takes to animate is derived from the real
-// gap between that update's `timestamp` and the previous one's — normal GPS
-// pings arrive ~10s apart, but dead-zone predictions from the backend's
-// watchdog arrive every ~5s (see node-server WATCHDOG_INTERVAL_MS). If we
-// always animated over a fixed 10s, updates would arrive faster than we can
-// play them back during a dead zone and the on-screen bus would drift
-// further and further behind real time the longer the dead zone lasted.
-// Falling back to DEFAULT_ANIM_MS when we don't have two timestamps to
-// compare yet (first update) or the gap looks bogus (clock skew, out-of-
-// order delivery) keeps behaviour identical to before in the common case.
 const DEFAULT_ANIM_MS = 10_000;
-const MIN_ANIM_MS = 2_000;
-const MAX_ANIM_MS = 12_000;
+const MIN_ANIM_MS     = 2_000;
+const MAX_ANIM_MS     = 12_000;
 
 const STATUS_LABELS: Record<Status, string> = {
-  idle: "Waiting for connection…",
+  idle:       "Waiting for connection…",
   connecting: "Connecting…",
-  riding: "Animating…",
-  waiting: "Waiting for next location…",
-  stopped: "Bus stopped",
+  riding:     "Animating…",
+  waiting:    "Waiting for next location…",
+  stopped:    "Bus stopped",
   last_known: "Showing last known location",
 };
 
-// ── pure helpers ──────────────────────────────────────────────────────────────
-
-const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
-const easeInOut = (t: number) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-
-function buildCumulativeDist(coords: LatLng[]): number[] {
-  const cd: number[] = [0];
-  for (let i = 1; i < coords.length; i++) {
-    const dlat = coords[i][0] - coords[i - 1][0];
-    const dlng = coords[i][1] - coords[i - 1][1];
-    cd.push(cd[cd.length - 1] + Math.sqrt(dlat * dlat + dlng * dlng));
-  }
-  return cd;
-}
-
-function getPositionAt(t: number, points: LatLng[], cumulDist: number[]): LatLng {
-  const total = cumulDist[cumulDist.length - 1];
-  const target = t * total;
-  let lo = 0, hi = cumulDist.length - 2;
-  while (lo < hi) {
-    const mid = (lo + hi) >> 1;
-    if (cumulDist[mid + 1] < target) lo = mid + 1;
-    else hi = mid;
-  }
-  const seg = cumulDist[lo + 1] - cumulDist[lo];
-  const segT = seg === 0 ? 0 : (target - cumulDist[lo]) / seg;
-  return [
-    lerp(points[lo][0], points[lo + 1][0], segT),
-    lerp(points[lo][1], points[lo + 1][1], segT),
-  ];
-}
-
-function bearing(from: LatLng, to: LatLng): number {
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const toDeg = (r: number) => (r * 180) / Math.PI;
-  const dLng = toRad(to[1] - from[1]);
-  const lat1 = toRad(from[0]);
-  const lat2 = toRad(to[0]);
-  const y = Math.sin(dLng) * Math.cos(lat2);
-  const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLng);
-  return (toDeg(Math.atan2(y, x)) + 360) % 360;
-}
-
-/** Sort a stop list by its `seq` (double precision) field, ascending. */
-function sortBySeq(stops: Stop[]): Stop[] {
-  return [...stops].sort((a, b) => (a.seq ?? 0) - (b.seq ?? 0));
-}
-
-// ── bus marker icon (Google Maps style — blue live-location puck) ─────────────
-
-function makeBusIcon(opacity = 1) {
-  return L.divIcon({
-    className: "",
-    html: `
-      <div class="smt-bike-icon" style="opacity:${opacity};width:40px;height:40px;display:flex;align-items:center;justify-content:center;">
-        <svg width="40" height="40" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="20" cy="20" r="18" fill="rgba(26,115,232,0.15)" stroke="#1a73e8" stroke-width="1.5"/>
-          <polygon
-            points="20,6 30,30 20,25 10,30"
-            fill="#1a73e8"
-            stroke="#ffffff"
-            stroke-width="1.5"
-            stroke-linejoin="round"
-          />
-          <circle cx="20" cy="20" r="2.5" fill="#ffffff"/>
-        </svg>
-      </div>`,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
-  });
-}
-
-// ── stop marker icons (regular / source / destination) ────────────────────────
-
-function makeStopIcon(kind: "source" | "destination" | "mid", label: number) {
-  if (kind === "source") {
-    return L.divIcon({
-      className: "",
-      html: `
-        <div style="display:flex;flex-direction:column;align-items:center;filter:drop-shadow(0 2px 4px rgba(60,64,67,0.3));">
-          <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
-            <path d="M15 0C6.72 0 0 6.72 0 15c0 11.25 15 25 15 25s15-13.75 15-25C30 6.72 23.28 0 15 0z" fill="#34a853"/>
-            <circle cx="15" cy="15" r="10.5" fill="#ffffff"/>
-            <path d="M10 15.5l3.2 3.2L20.5 11" stroke="#34a853" stroke-width="2.4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
-          </svg>
-        </div>`,
-      iconSize: [30, 40],
-      iconAnchor: [15, 40],
-      popupAnchor: [0, -36],
-    });
-  }
-  if (kind === "destination") {
-    return L.divIcon({
-      className: "",
-      html: `
-        <div style="filter:drop-shadow(0 2px 4px rgba(60,64,67,0.3));">
-          <svg width="30" height="40" viewBox="0 0 30 40" xmlns="http://www.w3.org/2000/svg">
-            <path d="M15 0C6.72 0 0 6.72 0 15c0 11.25 15 25 15 25s15-13.75 15-25C30 6.72 23.28 0 15 0z" fill="#ea4335"/>
-            <circle cx="15" cy="15" r="10.5" fill="#ffffff"/>
-            <g transform="translate(9.5,9)">
-              <rect width="1.6" height="12.5" fill="#ea4335"/>
-              <path d="M1.6 0h9l-2.2 2.6 2.2 2.6h-9z" fill="#ea4335"/>
-            </g>
-          </svg>
-        </div>`,
-      iconSize: [30, 40],
-      iconAnchor: [15, 40],
-      popupAnchor: [0, -36],
-    });
-  }
-  return L.divIcon({
-    className: "",
-    html: `
-      <div style="filter:drop-shadow(0 1px 3px rgba(60,64,67,0.25));">
-        <svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <circle cx="12" cy="12" r="11" fill="#1a73e8" stroke="#ffffff" stroke-width="2"/>
-          <text x="12" y="16" text-anchor="middle" font-family="DM Mono, monospace" font-size="10" font-weight="600" fill="#ffffff">${label}</text>
-        </svg>
-      </div>`,
-    iconSize: [24, 24],
-    iconAnchor: [12, 12],
-    popupAnchor: [0, -12],
-  });
-}
-
-// ── component ─────────────────────────────────────────────────────────────────
 
 export default function BusTracker() {
   const { tripId } = useParams<{ tripId: string }>();
 
-  // ── map refs ────────────────────────────────────────────────────────────
+  // Map / marker / layer refs.
   const mapContainerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<Map | null>(null);
-  const markerRef = useRef<Marker | null>(null);
-  const routeLayerRef = useRef<Polyline | null>(null);
-  const stopMarkersRef = useRef<Marker[]>([]);
-  const animFrameRef = useRef<number | null>(null);
-  const startTimeRef = useRef<number | null>(null);
-  const socketRef = useRef<Socket | null>(null);
+  const mapRef          = useRef<Map | null>(null);
+  const markerRef       = useRef<Marker | null>(null);
+  const routeLayerRef   = useRef<Polyline | null>(null);
+  const stopMarkersRef  = useRef<Marker[]>([]);
 
-  const currentPosRef = useRef<LatLng | null>(null);
+  // Animation refs.
+  const animFrameRef   = useRef<number | null>(null);
+  const startTimeRef   = useRef<number | null>(null);
+  const currentPosRef  = useRef<LatLng | null>(null);
   const routePointsRef = useRef<LatLng[]>([]);
-  const cumulDistRef = useRef<number[]>([]);
-  const joinedRoomRef = useRef<string | null>(null);
+  const cumulDistRef   = useRef<number[]>([]);
 
-  // ── queue refs ──────────────────────────────────────────────────────────
-  const updateQueueRef = useRef<LocationUpdate[]>([]);
-  const lastAnimStartRef = useRef<number>(0);
-  const schedulerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // `timestamp` (server-side event time) of the last update we actually
-  // displayed — used to measure the real gap to the next update, which may
-  // not be 10s (see DEFAULT_ANIM_MS comment above).
+  // Socket / queue refs.
+  const socketRef              = useRef<Socket | null>(null);
+  const joinedRoomRef          = useRef<string | null>(null);
+  const updateQueueRef         = useRef<LocationUpdate[]>([]);
+  const schedulerRef           = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastAnimStartRef       = useRef<number>(0);
   const lastUpdateTimestampRef = useRef<number | null>(null);
-  // Duration used to animate/pace the segment currently in flight; scheduleNext
-  // paces the *next* dequeue against this rather than a fixed SLOT_MS.
   const lastSegmentDurationRef = useRef<number>(DEFAULT_ANIM_MS);
 
-  // ── ui state ────────────────────────────────────────────────────────────
-  const [status, setStatus] = useState<Status>("idle");
-  const [stops, setStops] = useState<Stop[]>([]);
-  const [etaMap, setEtaMap] = useState<Record<number, StopEta>>({});
+  const [status, setStatus]           = useState<Status>("idle");
+  const [stops, setStops]             = useState<Stop[]>([]);
+  const [etaMap, setEtaMap]           = useState<Record<number, StopEta>>({});
   const [boardAlight, setBoardAlight] = useState<BoardAlight>({});
   const [theme, setTheme] = useState<"light" | "dark">(() => {
     if (typeof window === "undefined") return "light";
     return (localStorage.getItem("smtTheme") as "light" | "dark") || "light";
   });
 
-  // ── load the board/alight stops the user picked on the search page ────────
+
+  // 1. Load the user's chosen boarding/alighting stops from localStorage.
   useEffect(() => {
     try {
       const raw = localStorage.getItem("trackBoardAlight");
       if (raw) setBoardAlight(JSON.parse(raw));
     } catch {
-      // ignore malformed/absent cache
     }
   }, []);
 
-  // ── poll ETA for every stop (Where-is-my-train style) ──────────────────────
+
+  // 2. Fetch ETA for every stop, then keep it fresh with a 15s poll.
   useEffect(() => {
     if (!tripId) return;
     let cancelled = false;
@@ -261,6 +95,8 @@ export default function BusTracker() {
     return () => { cancelled = true; clearInterval(interval); };
   }, [tripId]);
 
+
+  // 3. Toggle light/dark theme and persist the choice.
   const toggleTheme = useCallback(() => {
     setTheme((prev) => {
       const next = prev === "light" ? "dark" : "light";
@@ -269,8 +105,8 @@ export default function BusTracker() {
     });
   }, []);
 
-  // ── render stop markers on the map (pure — no fetching here) ─────────────
-  // `stopList` must already be sorted by `seq` before being passed in.
+
+  // 4. Render stop markers + fit the map bounds to the route.
   const renderStops = useCallback((stopList: Stop[]) => {
     const map = mapRef.current;
     if (!map) return;
@@ -293,24 +129,11 @@ export default function BusTracker() {
     stopList.forEach((stop, i) => {
       const kind: "source" | "destination" | "mid" =
         i === 0 ? "source" : i === lastIdx ? "destination" : "mid";
-      const icon = makeStopIcon(kind, i + 1);
 
-      const marker = L.marker([stop.lat, stop.lng], { icon })
+      const marker = L.marker([stop.lat, stop.lng], { icon: makeStopIcon(kind, i + 1) })
         .addTo(map)
         .bindPopup(
-          `<div style="font-family:'DM Mono',monospace; min-width:170px; background:#ffffff; border:1px solid #dadce0; border-radius:10px; padding:10px 14px; box-shadow:0 2px 8px rgba(60,64,67,0.2);">
-        <div style="display:flex; align-items:center; gap:8px; margin-bottom:4px;">
-          <div style="width:20px; height:20px; border-radius:50%; background:${kind === "source" ? "#34a853" : kind === "destination" ? "#ea4335" : "#1a73e8"}; color:#fff; font-size:11px; font-weight:600; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
-            ${i + 1}
-          </div>
-          <span style="color:#202124; font-size:13px; font-weight:600; letter-spacing:0.02em;">
-            ${kind === "source" ? "Source" : kind === "destination" ? "Destination" : `Stop ${i + 1}`}
-          </span>
-        </div>
-        <div style="color:#5f6368; font-size:11px; padding-left:28px; line-height:1.4;">
-          ${stop.stop_name}
-        </div>
-      </div>`,
+          makeStopPopupHtml(kind, i, stop.stop_name),
           { className: 'light-popup', closeButton: false, offset: [0, -8] }
         );
       stopMarkersRef.current.push(marker);
@@ -319,7 +142,8 @@ export default function BusTracker() {
     map.fitBounds(latLngs as L.LatLngBoundsExpression, { padding: [40, 40] });
   }, []);
 
-  // ── load route stops: fetch from the server first (source of truth) ──────
+
+  // 5. Load the route's stops.
   const loadRouteStops = useCallback(async () => {
     if (tripId) {
       try {
@@ -360,7 +184,8 @@ export default function BusTracker() {
     renderStops(stopList);
   }, [tripId, renderStops]);
 
-  // ── reset map state ──────────────────────────────────────────────────────
+
+  // 6. Reset all map/animation/queue state — called when switching to track a different trip.
   const resetMapState = useCallback(() => {
     const map = mapRef.current;
 
@@ -382,17 +207,18 @@ export default function BusTracker() {
       clearTimeout(schedulerRef.current);
       schedulerRef.current = null;
     }
-    lastAnimStartRef.current = 0;
+    lastAnimStartRef.current       = 0;
     lastUpdateTimestampRef.current = null;
     lastSegmentDurationRef.current = DEFAULT_ANIM_MS;
 
-    currentPosRef.current = null;
+    currentPosRef.current  = null;
     routePointsRef.current = [];
-    cumulDistRef.current = [];
+    cumulDistRef.current   = [];
     setStatus("waiting");
   }, []);
 
-  // ── join room ────────────────────────────────────────────────────────────
+
+  // 7. Join a trip's socket room, resetting state first if we were tracking a different one.
   const joinRoom = useCallback((id: string) => {
     const socket = socketRef.current;
     if (!socket || !id.trim()) return;
@@ -406,7 +232,8 @@ export default function BusTracker() {
     joinedRoomRef.current = id;
   }, [resetMapState]);
 
-  // ── stop animation ───────────────────────────────────────────────────────
+
+  // 8. Cancel any in-progress marker animation.
   const stopAnimation = useCallback(() => {
     if (animFrameRef.current !== null) {
       cancelAnimationFrame(animFrameRef.current);
@@ -414,7 +241,8 @@ export default function BusTracker() {
     }
   }, []);
 
-  // ── jump marker ──────────────────────────────────────────────────────────
+
+  // 9. Snap the marker straight to a position with no animation.
   const jumpToPosition = useCallback((pos: LatLng) => {
     currentPosRef.current = pos;
     const map = mapRef.current;
@@ -427,7 +255,8 @@ export default function BusTracker() {
     setStatus("waiting");
   }, []);
 
-  // ── animate segment ──────────────────────────────────────────────────────
+
+  // 10. Animate the bus marker smoothly from one ping to the next.
   const animateSegment = useCallback(
     (from: LatLng, to: LatLng, durationMs: number = DEFAULT_ANIM_MS) => {
       const map = mapRef.current;
@@ -442,7 +271,7 @@ export default function BusTracker() {
 
       const routePoints: LatLng[] = [from, to];
       routePointsRef.current = routePoints;
-      cumulDistRef.current = buildCumulativeDist(routePoints);
+      cumulDistRef.current   = buildCumulativeDist(routePoints);
 
       if (!markerRef.current) {
         markerRef.current = L.marker(from, { icon: makeBusIcon() }).addTo(map);
@@ -462,7 +291,7 @@ export default function BusTracker() {
 
         if (startTimeRef.current === null) startTimeRef.current = ts;
         const raw = Math.min((ts - startTimeRef.current) / durationMs, 1);
-        const t = easeInOut(raw);
+        const t   = easeInOut(raw);
         const pos = getPositionAt(t, routePointsRef.current, cumulDistRef.current);
 
         markerRef.current?.setLatLng(pos);
@@ -496,27 +325,25 @@ export default function BusTracker() {
     [stopAnimation, jumpToPosition]
   );
 
-  // ── keep always-fresh refs ───────────────────────────────────────────────
-  const joinRoomRef = useRef(joinRoom);
+  const joinRoomRef       = useRef(joinRoom);
   const animateSegmentRef = useRef(animateSegment);
   useEffect(() => { joinRoomRef.current = joinRoom; }, [joinRoom]);
   useEffect(() => { animateSegmentRef.current = animateSegment; }, [animateSegment]);
 
-  // ── scheduleNext ─────────────────────────────────────────────────────────
   const scheduleNextRef = useRef<() => void>(() => { });
 
+
+  // 11. Pop the next queued location update & animate to it once the current animation's duration has elapsed.
   const scheduleNext = useCallback(() => {
     if (updateQueueRef.current.length === 0) {
       schedulerRef.current = null;
       return;
     }
 
-    const now = Date.now();
-    const elapsed = now - lastAnimStartRef.current;
+    const now      = Date.now();
+    const elapsed  = now - lastAnimStartRef.current;
     const isHidden = document.visibilityState === "hidden";
-    // Pace against how long the *previous* segment was actually given to
-    // animate, not a fixed slot — see DEFAULT_ANIM_MS comment.
-    const delay = isHidden ? 0 : Math.max(0, lastSegmentDurationRef.current - elapsed);
+    const delay    = isHidden ? 0 : Math.max(0, lastSegmentDurationRef.current - elapsed);
 
     schedulerRef.current = setTimeout(() => {
       schedulerRef.current = null;
@@ -527,12 +354,8 @@ export default function BusTracker() {
       lastAnimStartRef.current = Date.now();
       const newPos: LatLng = [next.lat, next.lon];
 
-      // Derive this segment's animation duration from the real gap between
-      // this update's timestamp and the last one we displayed, clamped to a
-      // sane range. Falls back to DEFAULT_ANIM_MS if we don't have a prior
-      // timestamp yet or the gap looks bogus (<=0, e.g. out-of-order delivery).
-      const prevTs = lastUpdateTimestampRef.current;
-      const rawGap = prevTs !== null ? next.timestamp - prevTs : NaN;
+      const prevTs   = lastUpdateTimestampRef.current;
+      const rawGap   = prevTs !== null ? next.timestamp - prevTs : NaN;
       const duration = Number.isFinite(rawGap) && rawGap > 0
         ? Math.min(MAX_ANIM_MS, Math.max(MIN_ANIM_MS, rawGap))
         : DEFAULT_ANIM_MS;
@@ -559,7 +382,8 @@ export default function BusTracker() {
 
   useEffect(() => { scheduleNextRef.current = scheduleNext; }, [scheduleNext]);
 
-  // ── enqueueUpdate ────────────────────────────────────────────────────────
+
+  // 12. Push a fresh location update onto the queue and kick off the scheduler if idle.
   const enqueueUpdate = useCallback((data: LocationUpdate) => {
     updateQueueRef.current.push(data);
     if (schedulerRef.current === null) {
@@ -567,7 +391,8 @@ export default function BusTracker() {
     }
   }, []);
 
-  // ── visibility change handler ────────────────────────────────────────────
+
+  // 13. When the tab becomes visible again, drop any stale queued updates & resume the scheduler immediately.
   useEffect(() => {
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
@@ -587,7 +412,8 @@ export default function BusTracker() {
     return () => document.removeEventListener("visibilitychange", handleVisibility);
   }, []);
 
-  // ── init Leaflet ─────────────────────────────────────────────────────────
+
+  // 14. Initialize the Leaflet map once on mount.
   useEffect(() => {
     if (mapRef.current || !mapContainerRef.current) return;
 
@@ -617,7 +443,8 @@ export default function BusTracker() {
     };
   }, [loadRouteStops]);
 
-  // ── Socket.IO ────────────────────────────────────────────────────────────
+
+  // 15. Connect to the tracking socket.
   useEffect(() => {
     if (!tripId) return;
 
@@ -657,9 +484,10 @@ export default function BusTracker() {
       socket.disconnect();
       socketRef.current = null;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+
+  // 16. Fly the map to a stop when it's tapped in the sidebar.
   const flyToStop = useCallback((stop: Stop) => {
     mapRef.current?.flyTo([stop.lat, stop.lng], 16, { duration: 0.8 });
   }, []);
@@ -765,7 +593,7 @@ export default function BusTracker() {
 
             {stops.map((stop, i) => {
               const kind = i === 0 ? "source" : i === lastIdx ? "destination" : "mid";
-              const eta = etaMap[stop.seq];
+              const eta  = etaMap[stop.seq];
               const isBoard  = !!boardAlight.board  && stop.stop_name === boardAlight.board;
               const isAlight = !!boardAlight.alight && stop.stop_name === boardAlight.alight;
 

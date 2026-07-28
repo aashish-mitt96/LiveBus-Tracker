@@ -35,7 +35,6 @@ body {
   overflow: hidden;
 }
 
-/* ── BG ORBS ── */
 .orb {
   position: fixed;
   border-radius: 50%;
@@ -68,7 +67,6 @@ body {
   flex-direction: column;
 }
 
-/* ── TOP BAR ── */
 .top-bar {
   display: flex;
   align-items: center;
@@ -112,7 +110,6 @@ body {
   flex-shrink: 0;
 }
 
-/* ── PAGE TITLE ── */
 .page-title {
   font-family: var(--font-head);
   font-size: 28px;
@@ -131,7 +128,6 @@ body {
   line-height: 1.4;
 }
 
-/* ── TRIP BADGE ── */
 .trip-badge {
   background: linear-gradient(135deg, #f59e0b18, #f59e0b08);
   border: 1px solid #f59e0b33;
@@ -183,7 +179,6 @@ body {
   padding: 2px 8px;
 }
 
-/* ── SECTION LABEL ── */
 .section-label {
   font-size: 11px;
   font-weight: 600;
@@ -193,7 +188,6 @@ body {
   margin-bottom: 14px;
 }
 
-/* ── INPUT FIELD ── */
 .field {
   margin-bottom: 20px;
 }
@@ -248,7 +242,6 @@ body {
   color: var(--muted);
 }
 
-/* ── ROUTE CARD ── */
 .route-card {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -309,7 +302,6 @@ body {
   width: 100%;
 }
 
-/* ── CTA BUTTON ── */
 .btn-cta {
   width: 100%;
   height: 58px;
@@ -344,7 +336,6 @@ body {
   cursor: not-allowed;
 }
 
-/* ── CONTROL PANEL ── */
 .control-wrap {
   flex: 1;
   display: flex;
@@ -352,7 +343,6 @@ body {
   gap: 2px;
 }
 
-/* ── TRACKING BUTTON ── */
 .main-btn {
   width: 160px;
   height: 160px;
@@ -414,7 +404,6 @@ body {
   }
 }
 
-/* ── TIMER ROW ── */
 .timer-row {
   display: flex;
   align-items: center;
@@ -445,7 +434,6 @@ body {
   }
 }
 
-/* ── LIVE LOCATION CARD ── */
 .location-card {
   background: #0a1628;
   border: 1px solid #1e3a5f;
@@ -505,7 +493,6 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ── PIN STOP BUTTON ── */
 .btn-pin {
   width: 100%;
   padding: 16px;
@@ -518,7 +505,6 @@ body {
   letter-spacing: 0.05em;
 }
 
-/* ── ERROR ── */
 .error-box {
   color: #f87171;
   background: #1a0d0d;
@@ -545,7 +531,6 @@ body {
   flex-shrink: 0;
 }
 
-/* ── END TRIP ── */
 .btn-end {
   width: 100%;
   height: 56px;
@@ -572,7 +557,6 @@ body {
   background: #ef444410;
 }
 
-/* ── FADE IN ── */
 .fade-in {
   animation: fadeUp 0.38s ease both;
 }

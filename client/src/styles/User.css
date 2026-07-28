@@ -48,7 +48,6 @@ body {
   color: var(--ink);
 }
 
-/* ── HERO BANNER ── */
 .hero-banner {
   position: relative;
   background: radial-gradient(
@@ -155,7 +154,6 @@ body {
   max-width: 280px;
 }
 
-/* ── PLANNER CARD (overlaps the banner) ── */
 .planner-card {
   position: relative;
   z-index: 2;
@@ -290,7 +288,6 @@ body {
   animation: spin 0.65s linear infinite;
 }
 
-/* ── CONTENT ── */
 .content {
   flex: 1;
   padding: 26px 20px 46px;
@@ -321,7 +318,6 @@ body {
   font-weight: 500;
 }
 
-/* ── PROMPT / EMPTY ── */
 .prompt,
 .empty {
   background: var(--surface);
@@ -356,7 +352,6 @@ body {
   line-height: 1.55;
 }
 
-/* ── BUS CARD ── */
 @keyframes slideUp {
   from {
     opacity: 0;
@@ -469,7 +464,6 @@ body {
   }
 }
 
-/* Route row with bus marker riding the dotted line */
 .route-row {
   padding: 4px 16px 14px;
   display: flex;
@@ -517,7 +511,6 @@ body {
   box-shadow: 0 3px 8px -1px rgba(31, 99, 184, 0.5);
 }
 
-/* Stats footer */
 .bus-stats {
   background: var(--surface-soft);
   padding: 11px 16px;
@@ -555,7 +548,6 @@ body {
   flex-shrink: 0;
 }
 
-/* ── SKELETON ── */
 @keyframes shimmer {
   0% {
     background-position: -400px 0;

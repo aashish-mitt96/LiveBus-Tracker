@@ -1,7 +1,7 @@
 import { useState } from "react";
 import '../styles/User.css';
 import { searchBuses, getStops } from "../apis/trip.api";
-import { BusIcon } from "../icons/svg";
+import { BusIcon } from "../icons/driverIcons";
 
 
 type Bus = {

@@ -1,3 +1,4 @@
+CREATE EXTENSION IF NOT EXISTS pg_trgm;--> statement-breakpoint
 CREATE TABLE "route" (
 	"routeId" text PRIMARY KEY NOT NULL,
 	"bus_number" text NOT NULL,

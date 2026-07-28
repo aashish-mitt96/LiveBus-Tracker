@@ -441,7 +441,18 @@ export default function BusTracker() {
       map.remove();
       mapRef.current = null;
     };
-  }, [loadRouteStops]);
+  }, []);
+
+  const hasMountedRef = useRef(false);
+  useEffect(() => {
+    if (!hasMountedRef.current) {
+      hasMountedRef.current = true;
+      return;
+    }
+    if (!mapRef.current) return;
+    resetMapState();
+    loadRouteStops();
+  }, [loadRouteStops, resetMapState]);
 
 
   // 15. Connect to the tracking socket.
@@ -484,7 +495,7 @@ export default function BusTracker() {
       socket.disconnect();
       socketRef.current = null;
     };
-  }, []);
+  }, [tripId]);
 
 
   // 16. Fly the map to a stop when it's tapped in the sidebar.
@@ -556,7 +567,7 @@ export default function BusTracker() {
           if (!eta) return null;
           if (eta.passed) return `${label}: already passed`;
           if (eta.etaMinutes === null) return `${label}: ETA unknown`;
-          return `${label} in ~${eta.etaMinutes} min`;
+          return `${label} in ${eta.etaMinutes} min`;
         };
 
         return (

@@ -1,6 +1,16 @@
 import L from "leaflet";
 
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+
 export function makeBusIcon(opacity = 1) {
   return L.divIcon({
     className: "",
@@ -94,7 +104,7 @@ export function makeStopPopupHtml(kind: "source" | "destination" | "mid", index:
         </span>
       </div>
       <div style="color:#5f6368; font-size:11px; padding-left:28px; line-height:1.4;">
-        ${stopName}
+        ${escapeHtml(stopName)}
       </div>
     </div>`;
 }

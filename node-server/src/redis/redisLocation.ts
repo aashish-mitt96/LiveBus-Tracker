@@ -4,18 +4,16 @@ import { trip } from "../database/schema/trip.schema";
 import { redisClient } from "./redisConnection";
 
 
-const LOCATIONIQ_TOKEN = process.env.LOCATIONIQ_TOKEN;
+const LOCATIONIQ_TOKEN     = process.env.LOCATIONIQ_TOKEN;
 const LOCATION_TTL_SECONDS = 7200; 
-const MATCH_WINDOW_SIZE = 2;   
+const MATCH_WINDOW_SIZE    = 2;   
 
 
 const PREDICTOR_SERVICE_URL = process.env.PREDICTOR_SERVICE_URL || "http://localhost:8000";
 
 
-const DEAD_ZONE_TIMEOUT_MS = Number(process.env.DEAD_ZONE_TIMEOUT_MS) || 20_000;
-
-
-const WATCHDOG_INTERVAL_MS = Number(process.env.WATCHDOG_INTERVAL_MS) || 5_000;
+const DEAD_ZONE_TIMEOUT_MS  = Number(process.env.DEAD_ZONE_TIMEOUT_MS) || 20_000;
+const WATCHDOG_INTERVAL_MS  = Number(process.env.WATCHDOG_INTERVAL_MS) || 5_000;
 
 
 type RawPoint = { lat: number; lon: number; ts: number };
@@ -28,10 +26,10 @@ type MapMatchResponse = {
 
 // Shape of the fields we actually read from the FastAPI predictor's /predict response.
 type PredictorResponse = {
-    lat: number;
-    lon: number;
-    velocity_mps: number;
-    predicted_at: number;
+    lat:                 number;
+    lon:                 number;
+    velocity_mps:        number;
+    predicted_at:        number;
     confidence_radius_m: number;
 };
 
@@ -124,6 +122,7 @@ async function snapToRoad(window: RawPoint[]): Promise<{ lat: number; lon: numbe
 }
 
 
+// Predict Location in a Dead Zone. 
 async function requestPredictedLocation(tripId: string): Promise<void> {
     if (predictInFlight[tripId]) return;
     const anchor = lastGoodState[tripId];
@@ -159,12 +158,12 @@ async function requestPredictedLocation(tripId: string): Promise<void> {
 
         const processedData = {
             tripId,
-            lat: predicted.lat,
-            lon: predicted.lon,
-            velocity: predicted.velocity_mps,
-            timestamp: predicted.predicted_at,
-            map_matched: false,
-            predicted: true,                               
+            lat:                 predicted.lat,
+            lon:                 predicted.lon,
+            velocity:            predicted.velocity_mps,
+            timestamp:           predicted.predicted_at,
+            map_matched:         false,
+            predicted:           true,                               
             confidence_radius_m: predicted.confidence_radius_m,
         };
         await redisClient.publish("processed_data", JSON.stringify(processedData));

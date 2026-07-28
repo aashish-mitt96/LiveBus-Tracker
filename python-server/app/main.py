@@ -14,7 +14,6 @@ from .schemas.schemas import (
 app = FastAPI(title="No Network Zone Route Predictor", version="2.0.0")
 
 
-# Health Check Endpoint.
 @app.get("/health")
 def health():
     return {"status": "ok"}

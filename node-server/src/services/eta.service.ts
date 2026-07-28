@@ -1,7 +1,7 @@
 import { asc, eq } from "drizzle-orm";
 import { db } from "../database/dbConnection";
-import { routeStop, routeSegmentSpeed } from "../database/schema/route.schema";
 import { redisClient } from "../redis/redisConnection";
+import { routeStop, routeSegmentSpeed } from "../database/schema/route.schema";
 import { buildRoutePath, PathPoint, projectOntoPath } from "../utils/route.utils";
 
 

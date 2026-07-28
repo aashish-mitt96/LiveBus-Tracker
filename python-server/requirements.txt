@@ -7,3 +7,4 @@ SQLAlchemy==2.0.43
 psycopg2-binary==2.9.10
 joblib==1.5.2
 python-dotenv==1.1.1
+tzdata==2025.2

@@ -22,7 +22,15 @@ There are also **two shared infrastructure components**:
 
 <br>
 
-## 2. People Using the App
+
+## 2. Architecture
+
+![LiveBus Architecture](architecture.png)
+
+
+<br>
+
+## 3. People Using the App
 
 There are **two kinds of humans** using this app.
 
@@ -36,7 +44,7 @@ There are **two kinds of humans** using this app.
 
 
 
-## 3. Core Vocabulary
+## 4. Core Vocabulary
 
 Before diving into the code, let's define the key nouns used throughout this codebase.
 
@@ -52,7 +60,7 @@ Before diving into the code, let's define the key nouns used throughout this cod
 <br>
 
 
-## 4. The Database (PostgreSQL)
+## 5. The Database (PostgreSQL)
 
 The database is **shared** between the Node server and the Python server — both connect to the *same* Postgres database, but each "owns" different tables. Node uses a tool called **Drizzle ORM** to define and manage its tables in TypeScript; Python just writes raw SQL against tables.
 
@@ -186,7 +194,7 @@ Stores the actual trained ML model for a route, as a binary blob.
 
 <br>
 
-## 5. The Redis
+## 6. The Redis
 
 Redis is an in-memory data store — meaning it's blazing fast but everything in it is temporary. It plays **four different roles** in this app.
 
@@ -248,7 +256,7 @@ Only when the trip **ends** does the server read this whole buffered list and wr
 <br>
 
 
-## 6. How a GPS Ping Flows Through the Whole System
+## 7. How a GPS Ping Flows Through the Whole System
 
 
 
@@ -290,7 +298,7 @@ Redis Subscriber
 <br>
 
 
-## 7. What Happens When GPS Goes Silent.
+## 8. What Happens When GPS Goes Silent.
 
 Sometimes a phone stops sending pings (tunnel, no signal). The system watches for this and "fills in the gap" with an educated guess.
 
@@ -358,7 +366,7 @@ This is a small ML model (one per route), built with scikit-learn's `HistGradien
 <br>
 
 
-## 8. How the ETA Is Calculated
+## 9. How the ETA Is Calculated
 
 
 

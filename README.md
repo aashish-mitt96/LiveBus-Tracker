@@ -22,6 +22,10 @@ There are also **two shared infrastructure components**:
 
 <br>
 
+![LiveBus Preview](preview.png)
+
+<br>
+
 
 ## 2. Architecture
 
